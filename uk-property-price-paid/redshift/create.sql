@@ -1,5 +1,5 @@
 -- Create table:
-CREATE TABLE uk_price_paid_col(
+CREATE TABLE uk_price_paid(
   transaction VARCHAR(40) primary key,
   price VARCHAR(255),
   transfer_date TIMESTAMP,
@@ -18,7 +18,7 @@ CREATE TABLE uk_price_paid_col(
   record_status VARCHAR(255));
 
 -- Copy CSV data from S3
-COPY uk_price_paid_col
+COPY uk_price_paid
 FROM 's3://bucket_name/pp-complete.csv'
 CREDENTIALS 'aws_access_key_id=...;aws_secret_access_key=...'
 DELIMITER ','
