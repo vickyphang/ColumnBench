@@ -56,6 +56,13 @@ CREATE TABLE dim_geography (
     city VARCHAR(50),
     postal_code VARCHAR(20)
 );
+
+-- State Dimension
+CREATE TABLE state_mapping (
+    state_number INT PRIMARY KEY,
+    state_name VARCHAR(20),
+    state_abbr VARCHAR(2)
+);
 ```
 
 ### Fact Table (Columnar Storage)
@@ -163,6 +170,61 @@ SELECT
 FROM generate_series(1, 10000) AS i;
 ```
 
+### Generate State Dimension
+```
+INSERT INTO state_mapping VALUES
+(1, 'Alabama', 'AL'),
+(2, 'Alaska', 'AK'),
+(3, 'Arizona', 'AZ'),
+(4, 'Arkansas', 'AR'),
+(5, 'California', 'CA'),
+(6, 'Colorado', 'CO'),
+(7, 'Connecticut', 'CT'),
+(8, 'Delaware', 'DE'),
+(9, 'Florida', 'FL'),
+(10, 'Georgia', 'GA'),
+(11, 'Hawaii', 'HI'),
+(12, 'Idaho', 'ID'),
+(13, 'Illinois', 'IL'),
+(14, 'Indiana', 'IN'),
+(15, 'Iowa', 'IA'),
+(16, 'Kansas', 'KS'),
+(17, 'Kentucky', 'KY'),
+(18, 'Louisiana', 'LA'),
+(19, 'Maine', 'ME'),
+(20, 'Maryland', 'MD'),
+(21, 'Massachusetts', 'MA'),
+(22, 'Michigan', 'MI'),
+(23, 'Minnesota', 'MN'),
+(24, 'Mississippi', 'MS'),
+(25, 'Missouri', 'MO'),
+(26, 'Montana', 'MT'),
+(27, 'Nebraska', 'NE'),
+(28, 'Nevada', 'NV'),
+(29, 'New Hampshire', 'NH'),
+(30, 'New Jersey', 'NJ'),
+(31, 'New Mexico', 'NM'),
+(32, 'New York', 'NY'),
+(33, 'North Carolina', 'NC'),
+(34, 'North Dakota', 'ND'),
+(35, 'Ohio', 'OH'),
+(36, 'Oklahoma', 'OK'),
+(37, 'Oregon', 'OR'),
+(38, 'Pennsylvania', 'PA'),
+(39, 'Rhode Island', 'RI'),
+(40, 'South Carolina', 'SC'),
+(41, 'South Dakota', 'SD'),
+(42, 'Tennessee', 'TN'),
+(43, 'Texas', 'TX'),
+(44, 'Utah', 'UT'),
+(45, 'Vermont', 'VT'),
+(46, 'Virginia', 'VA'),
+(47, 'Washington', 'WA'),
+(48, 'West Virginia', 'WV'),
+(49, 'Wisconsin', 'WI'),
+(50, 'Wyoming', 'WY');
+```
+
 ### Generate Fact Sales (100 million records in batches)
 
 ```sql
@@ -256,18 +318,30 @@ GROUP BY g.region, g.state;
 ## Analytical Queries for Metabase
 
 ### Time Series Dashboard
+Line Chart: Monthly Sales Trend (from `mv_sales_trends`)
 
+**Optimized Query:**
 ```sql
 SELECT 
-    year || '-' || LPAD(month::text, 2, '0') AS year_month,
+    year || '-' || LPAD(month::text, 2, '0') AS period,
     gross_sales,
     net_profit,
-    profit_margin,
-    total_units
+    profit_margin
 FROM mv_sales_trends
-WHERE year >= EXTRACT(YEAR FROM CURRENT_DATE) - 2
+WHERE year >= EXTRACT(YEAR FROM CURRENT_DATE) - 2  -- Last 3 years
 ORDER BY year, month;
 ```
+
+**Metabase Setup:**
+1. Click "New" > "Question" > "Native query"
+2. Select your Hydra database
+3. Paste the query above
+4. Visualization type: **Line**
+   - X-axis: `period`
+   - Y-axis: `gross_sales` (primary), `net_profit` (secondary)
+5. Display options:
+   - Enable "Show goal line" at average profit margin
+   - Set "Line width" to 2px
 
 **Recommended Visualizations:**
 - Line chart: Sales and profit trends
@@ -275,45 +349,74 @@ ORDER BY year, month;
 - Metric cards: Key performance indicators
 
 ### Product Performance Dashboard
-
+**Query (using mv_product_performance):**
 ```sql
 SELECT 
     category,
     sub_category,
-    brand,
-    gross_sales,
-    net_profit,
-    profit_margin,
-    daily_sales_velocity
+    SUM(gross_sales) AS total_sales,
+    SUM(net_profit) AS total_profit
 FROM mv_product_performance
-ORDER BY gross_sales DESC
-LIMIT 50;
+GROUP BY category, sub_category
+ORDER BY total_sales DESC
+LIMIT 20;  -- Top 20 sub-categories
 ```
 
-**Recommended Visualizations:**
-- Treemap: Sales by category hierarchy
-- Scatter plot: Profit margin vs. sales velocity
-- Table: Detailed product metrics
+**Step-by-Step Setup:**
+1. In Metabase, click "New" > "Question" > "Native query"
+2. Select your Hydra database connection
+3. Paste the query above
+4. Click "Visualization" and select **Bar** chart
+5. Configure:
+   - X-axis: `sub_category`
+   - Y-axis: `total_sales`
+   - Series breakout: `category`
+6. Under "Display":
+   - Set "Stacking" to "Stacked"
+   - Enable "Show values on data points"
+   - Set "Bar width" to 70%
+7. Click "Save" and name it "Product Sales by Category"
+
+**Alternative Visualization Options:**
+- **Pie Chart** for market share:
+  - Use only `category` and `total_sales`
+  - Display as percentage of total
+- **Table** for detailed metrics:
+  - Show all columns
+  - Add conditional formatting for profit
 
 ### Customer Segmentation Dashboard
 
+**Query (using mv_customer_analysis):**
 ```sql
 SELECT 
     segment,
     loyalty_tier,
-    customer_count,
     total_spend,
-    avg_order_value,
-    total_profit,
-    total_profit/NULLIF(customer_count,0) AS profit_per_customer
+    avg_order_value
 FROM mv_customer_analysis
-ORDER BY total_spend DESC;
+ORDER BY segment, loyalty_tier;
 ```
 
-**Recommended Visualizations:**
-- Pie chart: Spend by customer segment
-- Bar chart: Profit per customer tier
-- Funnel chart: Customer conversion metrics
+**Step-by-Step Setup:**
+1. Create new native query with the above SQL
+2. Select **Bar** visualization
+3. Configure:
+   - X-axis: `segment`
+   - Y-axis: `total_spend`
+   - Series breakout: `loyalty_tier` 
+4. Under "Display":
+   - Set "Stacking" to "Stacked"
+   - Enable "Show trend line" for avg_order_value
+5. Click "Save" as "Customer Spending by Segment & Tier"
+
+**Adding a Second Visualization (Pie Chart):**
+1. Duplicate the question
+2. Change visualization to **Pie**
+3. Configure:
+   - Dimension: `segment`
+   - Metric: `total_spend`
+4. Save as "Spending Distribution by Segment"
 
 ## Maintenance
 
